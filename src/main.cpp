@@ -1,61 +1,58 @@
 #include <Arduino.h>
-#include <Wire.h>
-#include <SPI.h>
-#include <LiquidCrystal.h>
-#include "HX711.h"
-#include "Freenove_WS2812_Lib_for_ESP32.h"
-#include <BMx280I2C.h>
-#include "main.h"
+#include "MedidorGas.h"
+#include "wifiUtils.h"
+
+
 
 LiquidCrystal lcd(pinLcdRS, pinLcdEN, pinLcdD4, pinLcdD5, pinLcdD6, pinLcdD7);
 HX711 cell1, cell2;
-Freenove_ESP32_WS2812 strip = Freenove_ESP32_WS2812(2, pinPixelLed, 1);
+Freenove_ESP32_WS2812 statusLed = Freenove_ESP32_WS2812(2, pinPixelLed, 1);
 BMx280I2C bmx280(0x76);
 
-int32_t readButtons() {
-  int32_t res = 0;
-  pinMode(pinBtnUp, INPUT_PULLUP);
-  pinMode(pinBtnDown, INPUT_PULLUP);
-  pinMode(pinBtnNext, INPUT_PULLUP);
-  pinMode(pinBtnEsc, INPUT_PULLUP);
-  pinMode(pinBtnOk, INPUT_PULLUP);
-  delayMicroseconds(30);
+TactSwitch BtnEnter, BtnUp, BtnDown, BtnEsc, BtnNext; // Interfase de 4 botones
+keyboard Keyboard;                           // Interfase de teclado
+lcd_ui ui(16, 2, pinBuzzer);                            // Interfaz de usuario con una pantalla de 2 x 16
 
-  if (!digitalRead(pinBtnUp)) res |= 1;
-  if (!digitalRead(pinBtnDown)) res |= 2;
-  if (!digitalRead(pinBtnNext)) res |= 4;
-  if (!digitalRead(pinBtnEsc)) res |= 8;
-  if (!digitalRead(pinBtnOk)) res |= 16;
-
-  pinMode(pinBtnUp, OUTPUT);
-  pinMode(pinBtnDown, OUTPUT);
-  pinMode(pinBtnNext, OUTPUT);
-  pinMode(pinBtnEsc, OUTPUT);
-  pinMode(pinBtnOk, OUTPUT);
-
-  return res;
-}
 
 void setup() {
 
   Serial.begin(115200);
+  Serial.println("Iniciando medidor de gas....");
+
 
   pinMode(pinRelay, OUTPUT);
   pinMode(pinBuzzer, OUTPUT);
   pinMode(pinLedOk, OUTPUT);
   pinMode(pinInput, INPUT);
 
-  lcd.begin(2, 16);
-  lcd.print("Test Medidor Gas!");
+  // Iniciar LCD
+  lcd.begin(16, 2);
   analogWrite(pinLcdBL, 128);
 
-  ledcSetup(0, 440, 8);
-  ledcAttachPin(pinBuzzer, 0);
+  // Inicializar las teclas
+  BtnEsc.begin(Keys::Esc, Keys::Left, pinBtnEsc);
+  BtnDown.begin(Keys::Down, pinBtnDown);
+  BtnUp.begin(Keys::Up, pinBtnUp);
+  BtnEnter.begin(Keys::Enter, pinBtnOk);
+  BtnNext.begin(Keys::Next, pinBtnNext);
 
+  // Agregar teclas al teclado
+  Keyboard.AddButton(&BtnEnter);
+  Keyboard.AddButton(&BtnUp);
+  Keyboard.AddButton(&BtnDown);
+  Keyboard.AddButton(&BtnEsc);
+  Keyboard.AddButton(&BtnNext);
+
+  ui.begin(&lcd, &Keyboard); // Inicia el stack UI
+
+
+  //Inicializar HX711
   cell1.begin(pinHX711Dat, pinHX711Clk);
   cell2.begin(pinHX711Dat2, pinHX711Clk2);
-  strip.begin();
+  //Inicializar pixel leds
+  statusLed.begin();
 
+  //Inicializar bus I2C
   Wire.begin(pinSDA, pinSCL);
   if (!bmx280.begin()) {
     Serial.println("begin() failed. check your BMx280 Interface and I2C Address.");
@@ -69,78 +66,12 @@ void setup() {
 
   Serial.println("Todo en linea!");
 
+  WifiStart();
+
 }
-uint32_t time = 0, leds = 0, color = 0, last = 0;
-int32_t  celda1 = 0, celda2 = 0;
-float Temperature = 0, Pressure = 0;
+
 void loop() {
 
-  int32_t btn = readButtons();
-  if (btn == 16) {
-    lcd.setCursor(0, 1);
-    lcd.printf("Celda 1: %d       ", celda1);
-  }
-  else if (btn == 4) {
-    lcd.setCursor(0, 1);
-    lcd.printf("Celda 2: %d       ", celda2);
-  }
-  else {
-    lcd.setCursor(0, 1);
-    lcd.printf("Botones: %d       ", btn);
-
-  }
-
-  if (btn)
-    ledcWrite(0, 10);
-  else
-    ledcWrite(0, 0);
-
-  if (btn == 8)
-    digitalWrite(pinRelay, 1);
-  else
-    digitalWrite(pinRelay, 0);
-
-  if ((millis() % 1000) < 500)
-    digitalWrite(pinLedOk, 1);
-  else
-    digitalWrite(pinLedOk, 0);
-
-  if (millis() - time > 999) {
-    time = millis();
-    celda1 += cell1.read();
-    celda2 += cell2.read();
-    celda1 /= 2;
-    celda2 /= 2;
-
-    Serial.printf("Celda 1: %d, celda 2: %d\n", celda1, celda2);
-  }
-
-
-  if (millis() - leds > 10) {
-    leds = millis();
-
-    strip.setLedColorData(0, 0, color, 0);
-    strip.setLedColorData(1, color, 0, 0);
-
-    color++;
-    color &= 0x3F;
-    strip.show();
-  }
-
-
-  if (millis() - last > 499) {
-    last = millis();
-
-    if (bmx280.hasValue()) {
-      Pressure = bmx280.getPressure() / 100.0;
-      float Temperature = bmx280.getTemperature();
-      Serial.printf("Temperatura: %0.2f°C, presion: %0.1fhPa\n", Temperature, Pressure);
-      lcd.setCursor(0, 0);
-      lcd.printf("%0.2f°C %0.1fhPa    ", Temperature, Pressure);
-    }
-    bmx280.measure();
-  }
-
-  delay(30);
+  ui.Run();
 
 }
