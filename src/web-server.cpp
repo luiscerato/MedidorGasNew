@@ -13,7 +13,7 @@
 // extern VarGarrafa_t Garrafa_Estado;
 // extern InfoGarrafa_t Garrafa_Info;
 // extern Conf_t Settings;
-// void SetTimeTo(uint32_t Secs);
+// void setTimeTo(uint32_t Secs);
 
 
 // void onRequest(AsyncWebServerRequest* request) {
@@ -110,7 +110,7 @@
 // 				AsyncWebParameter* body = request->getParam("body", true);
 // 				Serial.printf(" '%s' = '%s'\n", body->name().c_str(), body->value().c_str());
 // 				int32_t time = body->value().toInt();
-// 				SetTimeTo(time);
+// 				setTimeTo(time);
 // 				}
 // 			else
 // 				error = "Parametro BODY faltante";

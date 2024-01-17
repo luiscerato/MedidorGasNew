@@ -66,11 +66,22 @@ void setup() {
 
   Serial.println("Todo en linea!");
 
+  UtilsStart();
+
   WifiStart();
+
+  TimeStart();
+
+  // TimeSetServer();
+
+  // DebugStart();
+
+  // OTAStart();
 
 }
 
 void loop() {
+ // UtilsLoop();
 
   ui.Run();
 

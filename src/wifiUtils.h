@@ -1,14 +1,11 @@
 #pragma once
 
-#define WEBSOCKET_PORT 80
-
 #include <Arduino.h>
 #include <esp_wifi.h>
 #include <ArduinoOTA.h>
 #include <RemoteDebug.h>
 
 extern RemoteDebug Debug;	//Acceso a las funciones de debugger remoto
-
 
 enum class Wifi_Mode : int32_t
 {
@@ -32,6 +29,14 @@ enum WiFiChar : char
 };
 
 
+
+void UtilsStart();
+
+
+bool UtilsLoadDeafultSettings();
+
+void UtilsLoop();
+
 void DebugStart();
 
 
@@ -42,6 +47,10 @@ void OTAStart();
 
 void OTAEnd();
 
+void TimeStart();
+
+void TimeSetServer();
+
 
 
 int32_t getWiFiRSSI();
@@ -49,8 +58,16 @@ char* getWiFiSSID();
 char getWiFiRSSICode();
 
 char getWiFiRSSICode(int32_t RSSI);
-
 char getWiFiRSSICode();
 
+time_t getTime(time_t* _timer);
+
+void setTimeTo(uint32_t Secs);
+
+String setTimeZone(timezone* TimeZone);
+
+String setTimeZone(int32_t offset, int32_t daylight);
+
+void printLocalTime();
 
 const char* getWifiEventName(WiFiEvent_t event);

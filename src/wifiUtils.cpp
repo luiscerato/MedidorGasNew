@@ -7,6 +7,8 @@
 
 Preferences Settings;
 RemoteDebug Debug;
+timezone localTimeZone = { 0, -180 };
+
 
 
 void OTA_onStart();
@@ -15,20 +17,107 @@ void OTA_onProgress(uint32_t progress, uint32_t total);
 void OTA_onError(ota_error_t error);
 void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info);
 
+
+void UtilsStart()
+{
+	Debug.setSerialEnabled(true);
+	if (Settings.begin("wifi-stuff", false) == false) {
+		debugE("Fallo al cargar 'wifi-stuff' desde Preferences");
+	}
+	else {
+		debugI("Cargando 'wifi-stuff' desde Preferences");
+		if (Settings.isKey("settings") == false) {
+			// Guardamos las configuraciones por primera vez
+			if (UtilsLoadDeafultSettings() == false) {
+				debugE("Fallo al guardar 'wifi-stuff' en Preferences");
+				return;
+			}
+			UtilsStart();
+		}
+	}
+}
+
+void UtilsLoop()
+{
+	ArduinoOTA.handle();
+	Debug.handle();
+}
+
+bool UtilsLoadDeafultSettings()
+{
+	Settings.end();	//Cerrar por las dudas
+	if (Settings.begin("wifi-stuff", false) == false) {
+		debugE("Fallo al cargar 'wifi-stuff' desde Preferences");
+		return false;
+	}
+	Settings.clear();
+	Settings.putBool("settings", true);
+
+	//Wifi
+	Settings.putInt("wifi-mode", static_cast<int32_t>(Wifi_Mode::Station));
+	Settings.putString("sta-ssid", "Wifi-Luis");
+	Settings.putString("sta-pass", "");
+	Settings.putBool("staticIp", false);
+	Settings.putString("sta-ip", "192.168.1.80");
+	Settings.putString("sta-mask", "255.255.255.0");
+	Settings.putString("sta-gw", "192.168.1.1");
+	Settings.putString("sta-dns1", "8.8.8.8");
+	Settings.putString("sta-dns2", "4.4.4.4");
+
+	//Wifi AP
+	Settings.putString("ap-ssid", "ESP32-AP");
+	Settings.putString("ap-pass", "");
+	Settings.putBool("ap-hide", false);
+	Settings.putBool("ap-custom-ip", false);
+	Settings.putString("ap-ip", "192.168.1.1");
+	Settings.putString("ap-mask", "255.255.255.0");
+	Settings.putString("ap-gw", "192.168.1.1");
+
+	//OTA
+	Settings.putBool("ota-enabled", true);
+	Settings.putString("ota-name", "MedidorGas");
+	Settings.putString("ota-pass", "");
+
+	//Time
+	Settings.putUInt("time-start", 1704067200); // 1/1/2024 00:00:00 GMT
+	Settings.putInt("time-dsttime", 0);
+	Settings.putInt("time-minwest", -180);
+
+	//NTP servers
+	Settings.putString("time-server", "pool.ntp.org");
+	Settings.putBool("time-sync", false);
+
+
+	//Remote debugger
+	Settings.putBool("debug-enabled", true);
+	Settings.putString("debug-name", "Medidor de gas");
+	Settings.putString("debug-pass", "");
+
+	Settings.end();	//Cerrar por las dudas
+	return true;
+}
+
 void DebugStart()
 {
+	Debug.setSerialEnabled(true);
 	debugI("Iniciando servicio RemoteDebug....");
 
-	String name = Settings.getString("debug-name", "Medidor de gas");
-	String pass = Settings.getString("debug-pass", "");
-	Debug.begin(name);
-	Debug.setResetCmdEnabled(true);
+	bool enabled = Settings.getBool("debug-enabled", true);
+	if (enabled) {
+		String name = Settings.getString("debug-name", "Medidor de gas");
+		String pass = Settings.getString("debug-pass", "");
+		Debug.begin(name);
 
-	if (pass.length() > 0) Debug.setPassword(pass);
-	Debug.showProfiler(true); // Profiler (Good to measure times, to optimize codes)
-	Debug.showColors(true); // Colors
+		if (pass.length() > 0) Debug.setPassword(pass);
+		Debug.showProfiler(true); // Profiler (Good to measure times, to optimize codes)
+		Debug.showColors(true); // Colors
 
-	debugI("Debugger listo!");
+		debugI("Debugger listo!");
+	}
+	else {
+		debugW("Remote debugger deshabilitado!");
+	}
+
 }
 
 
@@ -38,15 +127,12 @@ void DebugStart()
 */
 void WifiStart()
 {
+	WiFi.disconnect(true, true);
 	Debug.setSerialEnabled(true);
 
-	WiFi.disconnect(true, true);
-	if (Settings.begin("wifi-stuff", false) == false) {
-		debugE("Fallo al cargar 'wifi-stuff' desde Preferences");
-	}
 
 	debugI("Iniciando Wifi...\n");
-	Wifi_Mode mode = static_cast<Wifi_Mode>(Settings.getInt("mode", static_cast<int32_t>(Wifi_Mode::Station)));
+	Wifi_Mode mode = static_cast<Wifi_Mode>(Settings.getInt("wifi-mode", static_cast<int32_t>(Wifi_Mode::Station)));
 
 	WiFi.mode(static_cast<wifi_mode_t>(mode));
 
@@ -89,7 +175,7 @@ void WifiStart()
 	String ssid = Settings.getString("sta-ssid", "Wifi-Luis");
 	String pass = Settings.getString("sta-pass", "");
 
-	debugI("Iniciando wifi...\nConectando a: %s...", ssid);
+	debugI("Iniciando wifi, intentando conectar a: %s...", ssid);
 	WiFi.setAutoReconnect(true);
 
 	if (WiFi.begin(ssid.c_str(), pass.c_str()))
@@ -190,7 +276,7 @@ void OTAStart()
 	String pass = Settings.getString("ota-pass", "");
 
 	if (enabled) {
-		debugI("Iniciando servicio de actualización de software OTA\n");
+		debugI("Iniciando servicio de actualización de software OTA");
 
 		if (name.length() > 0)
 			ArduinoOTA.setHostname(name.c_str());
@@ -260,38 +346,108 @@ void OTA_onError(ota_error_t error)
 }
 
 
+
+void TimeStart()
+{
+	debugI("Iniciando reloj...");
+
+	time_t now = Settings.getUInt("time-start", 1704067200); // 1/1/2024 00:00:00 GMT
+	localTimeZone.tz_dsttime = Settings.getInt("time-dsttime", 0);
+	localTimeZone.tz_minuteswest = Settings.getInt("time-minwest", -180);
+
+	setTimeZone(&localTimeZone);
+
+	setTimeTo(now);
+	printLocalTime();
+}
+
+void TimeSetServer()
+{
+	String server = Settings.getString("time-server", "pool.ntp.org");
+	debugI("Iniciando servidor de hora. Server: '%s'...", server.c_str());
+
+	bool sync = Settings.getBool("time-sync", false);
+	if (sync == false) {
+		debugW("La actualizacion de hora desde internet esta desactivada.");
+		return;
+	}
+	// Setear el servidor de tiempo
+	const char* tz = setTimeZone(&localTimeZone).c_str();
+	configTzTime(tz, server.c_str());
+	debugW("getenv: %s\n", getenv("TZ"));
+
+	/*
+			Una vez seteado el servidor sntp la hora se sincroniza automáticamente
+			cada una hora.
+
+			https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/system_time.html
+	*/
+}
+
+
+
+
 time_t getTime(time_t* _timer)
 {
 	time_t now = time(_timer);
-	// return now + (Settings.Time.TimeZone.tz_minuteswest * 60);
-	return now;
-	// return difftime(now, Settings.Time.TimeZone.tz_minuteswest * 60);
+	return now + (localTimeZone.tz_minuteswest * 60) + (localTimeZone.tz_dsttime * 60);
 }
 
+void setTimeTo(uint32_t Secs)
+{
+	struct timeval now = { (time_t)Secs, 0 };
+	settimeofday(&now, nullptr);
+}
 
+String setTimeZone(timezone* TimeZone)
+{
+	return setTimeZone(TimeZone->tz_minuteswest * 60, TimeZone->tz_dsttime * 60);
+}
 
+String setTimeZone(int32_t offset, int32_t daylight)
+{
+	char cst[17] = { 0 }, cdt[17] = { 0 }, tz[33] = { 0 };
 
+	debugI("Zona horaria: %i, daylight :%i\n", offset, daylight);
+	offset *= -1;
 
-
-
-
-
-
+	if (offset % 3600) {
+		sprintf(cst, "UTC%ld:%02u:%02u", offset / 3600, abs((offset % 3600) / 60), abs(offset % 60));
+	}
+	else {
+		sprintf(cst, "UTC%ld", offset / 3600);
+	}
+	if (daylight) {
+		long tz_dst = offset - daylight;
+		if (tz_dst % 3600) {
+			sprintf(cdt, "DST%ld:%02u:%02u", tz_dst / 3600, abs((tz_dst % 3600) / 60), abs(tz_dst % 60));
+		}
+		else {
+			sprintf(cdt, "DST%ld", tz_dst / 3600);
+		}
+	}
+	sprintf(tz, "%s%s", cst, cdt);
+	debugI("Time Zone: %s", tz);
+	setenv("TZ", tz, 1);
+	tzset();
+	return String(tz);
+}
 
 void printLocalTime()
 {
-	unsigned long Time;
-
-	struct tm timeinfo;
-	Time = micros();
-	if (!getLocalTime(&timeinfo)) {
-		debugE("Failed to obtain time");
+	struct tm ti;
+	if (!getLocalTime(&ti)) {
+		debugE("Fallo al obtener la fecha y hora!");
 		return;
 	}
-	Time = micros() - Time;
-	Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-	Serial.printf("Time: %u us\n", Time);
+	debugI("Fecha y hora: %02d/%02d/%04d %02d:%02d:%02d", ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900, ti.tm_hour, ti.tm_min, ti.tm_sec);
 }
+
+
+
+
+
+
 
 String getElapsedTime(time_t time, bool format)
 {
