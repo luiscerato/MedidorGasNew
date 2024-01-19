@@ -21,7 +21,7 @@ void lcd_ui::ResetUpdateTime()
 
 lcd_ui::lcd_ui(int32_t w, int32_t h, int8_t SoundPin)
 {
-    ESP_LOGI(TAG);
+    ESP_LOGI(TAG, "");
     for (int32_t i = 0; i < UI_Max_Screens; i++)
         Screens[i].init();
     for (int32_t i = 0; i < UI_Max_Levels; i++)
@@ -39,7 +39,7 @@ lcd_ui::lcd_ui(int32_t w, int32_t h, int8_t SoundPin)
 
 lcd_ui::~lcd_ui()
 {
-    ESP_LOGI(TAG);
+     ESP_LOGI(TAG, "");
 }
 
 void lcd_ui::begin(LiquidCrystal *lcd, keyboard *keys)
